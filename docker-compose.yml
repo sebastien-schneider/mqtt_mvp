@@ -1,0 +1,55 @@
+services:
+  emqx:
+    image: emqx/emqx:latest
+    container_name: emqx
+    ports:
+      - "1883:1883"   # MQTT
+      - "18083:18083" # Dashboard
+    restart: unless-stopped
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"  # External Kafka API
+      - "9644:9644"    # Admin API
+    restart: unless-stopped
+
+  mqtt_publisher:
+    build: ./mqtt_publisher
+    container_name: mqtt_publisher
+    depends_on:
+      - emqx
+    environment:
+      - MQTT_BROKER=emqx
+    restart: unless-stopped
+
+  mqtt_subscriber:
+    build: ./mqtt_subscriber
+    container_name: mqtt_subscriber
+    depends_on:
+      - emqx
+    environment:
+      - MQTT_BROKER=emqx
+    restart: unless-stopped
+
+  kafka_consumer:
+    build: ./kafka_consumer
+    container_name: kafka_consumer
+    depends_on:
+      - redpanda
+    environment:
+      - KAFKA_BROKER=redpanda:9092
+      - KAFKA_TOPIC=fms-data-stream
+    restart: unless-stopped
